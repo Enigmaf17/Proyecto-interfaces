@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="UnoLogica/UnoLogica.csproj" />
+  <Project Path="UnoUI/UnoUI.csproj" />
+</Solution>
