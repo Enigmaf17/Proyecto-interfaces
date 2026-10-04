@@ -115,3 +115,29 @@ async def obtener_movimientos(partida_id: int):
 
     except Exception as e:
         return {"status": "Error", "detalle": str(e)}
+
+@app.put("/partidas/{partida_id}/finalizar")
+async def finalizar_partida(partida_id: int, datos: FinPartida):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "UPDATE partidas SET fecha_fin = NOW(), ganador_id = %s WHERE id = %s",
+            (datos.ganador_id, partida_id),
+        )
+        cursor.execute(
+            """UPDATE partida_jugador
+               SET resultado = IF(jugador_id = %s, 'ganada', 'perdida')
+               WHERE partida_id = %s""",
+            (datos.ganador_id, partida_id),
+        )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {"status": "OK"}
+
+    except Exception as e:
+        return {"status": "Error", "detalle": str(e)}
