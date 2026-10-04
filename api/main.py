@@ -141,3 +141,37 @@ async def finalizar_partida(partida_id: int, datos: FinPartida):
 
     except Exception as e:
         return {"status": "Error", "detalle": str(e)}
+
+@app.get("/jugadores/{jugador_id}/estadisticas")
+async def obtener_estadisticas(jugador_id: int):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            """SELECT j.id, j.nombre,
+                      SUM(pj.resultado = 'ganada')  AS ganadas,
+                      SUM(pj.resultado = 'perdida') AS perdidas
+               FROM jugadores j
+               LEFT JOIN partida_jugador pj ON pj.jugador_id = j.id
+               WHERE j.id = %s
+               GROUP BY j.id, j.nombre""",
+            (jugador_id,),
+        )
+        fila = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if fila is None:
+            return {"status": "Error", "detalle": "Jugador no encontrado"}
+
+        return {
+            "id": fila["id"],
+            "nombre": fila["nombre"],
+            "ganadas": int(fila["ganadas"] or 0),
+            "perdidas": int(fila["perdidas"] or 0),
+        }
+
+    except Exception as e:
+        return {"status": "Error", "detalle": str(e)}
