@@ -60,7 +60,61 @@
         // Juega una carta y aplica su efecto. colorElegido solo se usa en los comodines
         public void JugarCarta(Carta carta, ColorCarta? colorElegido = null)
         {
-            throw new NotImplementedException();
+            Jugador jugador = JugadorEnTurno;
+            bool esComodin = carta.Tipo == TipoCarta.Comodin || carta.Tipo == TipoCarta.ComodinMasCuatro;
+
+            // 1. Validaciones
+            if (Ganador != null)
+                throw new InvalidOperationException("La partida ya terminó.");
+            if (!jugador.Mano.Contains(carta))
+                throw new InvalidOperationException("El jugador no tiene esa carta.");
+            if (!PuedeJugar(carta))
+                throw new InvalidOperationException("Esa carta no se puede jugar.");
+            if (esComodin && (colorElegido == null || colorElegido == ColorCarta.Negro))
+                throw new InvalidOperationException("Hay que elegir un color para el comodín.");
+
+            // 2. Mover la carta de la mano a la mesa
+            jugador.Mano.Remove(carta);
+            PonerCartaEnMesa(carta, esComodin ? colorElegido : null);
+
+            // 3. ¿Ganó?
+            if (jugador.Mano.Count == 0)
+            {
+                Ganador = jugador;
+                return;
+            }
+
+            // 4. Castigo por no decir UNO: si le queda 1 carta y no lo dijo, roba 2
+            if (jugador.Mano.Count == 1 && !jugador.DijoUno)
+                RobarPara(jugador, 2);
+            jugador.DijoUno = false;
+
+            // 5. Efecto de la carta
+            switch (carta.Tipo)
+            {
+                case TipoCarta.Salta:
+                    PasarTurno(); // brinca al siguiente jugador
+                    break;
+
+                case TipoCarta.Reversa:
+                    SentidoHorario = !SentidoHorario;
+                    if (Jugadores.Count == 2)
+                        PasarTurno(); // con 2 jugadores, la reversa funciona como salta
+                    break;
+
+                case TipoCarta.MasDos:
+                    PasarTurno();
+                    RobarPara(JugadorEnTurno, 2); // el siguiente roba 2 y pierde su turno
+                    break;
+
+                case TipoCarta.ComodinMasCuatro:
+                    PasarTurno();
+                    RobarPara(JugadorEnTurno, 4); // el siguiente roba 4 y pierde su turno
+                    break;
+            }
+
+            // 6. Turno del siguiente jugador
+            PasarTurno();
         }
 
         // El jugador en turno roba una carta del mazo
@@ -69,10 +123,22 @@
             throw new NotImplementedException();
         }
 
-        // El jugador en turno dice "UNO"
+        // El jugador indicado roba una cantidad de cartas del mazo
+        private void RobarPara(Jugador jugador, int cantidad)
+        {
+            for (int i = 0; i < cantidad; i++)
+            {
+                if (Mazo.CantidadCartas == 0)
+                    Mazo.Rellenar(Descarte);
+
+                jugador.Mano.Add(Mazo.Robar());
+            }
+        }
+
+        // El jugador en turno dice "UNO" (antes de tirar su penúltima carta)
         public void DecirUno()
         {
-            throw new NotImplementedException();
+            JugadorEnTurno.DijoUno = true;
         }
 
         // Pasa al siguiente jugador según el sentido del juego
