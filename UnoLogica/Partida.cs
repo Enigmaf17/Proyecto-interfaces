@@ -135,10 +135,10 @@
             }
         }
 
-        // El jugador en turno dice "UNO"
+        // El jugador en turno dice "UNO" (antes de tirar su penúltima carta)
         public void DecirUno()
         {
-            throw new NotImplementedException();
+            JugadorEnTurno.DijoUno = true;
         }
 
         // Pasa al siguiente jugador según el sentido del juego
