@@ -71,3 +71,47 @@ async def crear_partida(datos: NuevaPartida):
 
     except Exception as e:
         return {"status": "Error", "detalle": str(e)}
+
+@app.post("/partidas/{partida_id}/movimientos")
+async def registrar_movimiento(partida_id: int, mov: NuevoMovimiento):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """INSERT INTO movimientos
+               (partida_id, jugador_id, turno, accion, carta, color_elegido)
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            (partida_id, mov.jugador_id, mov.turno, mov.accion, mov.carta, mov.color_elegido),
+        )
+
+        conn.commit()
+        movimiento_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+
+        return {"id": movimiento_id}
+
+    except Exception as e:
+        return {"status": "Error", "detalle": str(e)}
+
+
+@app.get("/partidas/{partida_id}/movimientos")
+async def obtener_movimientos(partida_id: int):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            "SELECT * FROM movimientos WHERE partida_id = %s ORDER BY id",
+            (partida_id,),
+        )
+        movimientos = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return movimientos
+
+    except Exception as e:
+        return {"status": "Error", "detalle": str(e)}
