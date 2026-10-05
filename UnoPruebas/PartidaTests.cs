@@ -156,4 +156,97 @@ public class PartidaTests
 
         Assert.Throws<InvalidOperationException>(() => partida.JugarCarta(mala));
     }
+
+    [Fact]
+    public void Iniciar_Reparte7ACadaJugadorYPoneUnaCartaDeNumero()
+    {
+        var partida = CrearPartida();
+        partida.Iniciar();
+
+        foreach (var jugador in partida.Jugadores)
+            Assert.Equal(7, jugador.Mano.Count);
+
+        Assert.Equal(TipoCarta.Numero, partida.CartaArriba().Tipo);
+
+        // Ninguna carta se pierde: mazo + manos + descarte = 108
+        int total = partida.Mazo.CantidadCartas + 21 + partida.Descarte.Count;
+        Assert.Equal(108, total);
+    }
+
+    [Fact]
+    public void RobarCarta_AgregaUnaCartaALaMano()
+    {
+        var partida = CrearPartida();
+        partida.Iniciar();
+
+        var robada = partida.RobarCarta();
+
+        Assert.Equal(8, partida.Jugadores[0].Mano.Count);
+        Assert.Contains(robada, partida.Jugadores[0].Mano);
+        Assert.Equal(0, partida.TurnoActual); // no pasa el turno solo
+    }
+
+    [Fact]
+    public void JugarCarta_MasDos_SiguienteRoba2YPierdeTurno()
+    {
+        var partida = CrearPartida();
+        partida.Mazo.Crear();
+        partida.PonerCartaEnMesa(new Carta(ColorCarta.Rojo, TipoCarta.Numero, 5));
+        var masDos = new Carta(ColorCarta.Rojo, TipoCarta.MasDos);
+        DarCartas(partida.Jugadores[0], masDos,
+            new Carta(ColorCarta.Azul, TipoCarta.Numero, 1),
+            new Carta(ColorCarta.Azul, TipoCarta.Numero, 2));
+
+        partida.JugarCarta(masDos);
+
+        Assert.Equal(2, partida.Jugadores[1].Mano.Count);
+        Assert.Equal(2, partida.TurnoActual);
+    }
+
+    [Fact]
+    public void JugarCarta_MasCuatro_SiguienteRoba4YCambiaColor()
+    {
+        var partida = CrearPartida();
+        partida.Mazo.Crear();
+        partida.PonerCartaEnMesa(new Carta(ColorCarta.Rojo, TipoCarta.Numero, 5));
+        var masCuatro = new Carta(ColorCarta.Negro, TipoCarta.ComodinMasCuatro);
+        DarCartas(partida.Jugadores[0], masCuatro,
+            new Carta(ColorCarta.Azul, TipoCarta.Numero, 1),
+            new Carta(ColorCarta.Azul, TipoCarta.Numero, 2));
+
+        partida.JugarCarta(masCuatro, ColorCarta.Verde);
+
+        Assert.Equal(4, partida.Jugadores[1].Mano.Count);
+        Assert.Equal(2, partida.TurnoActual);
+        Assert.Equal(ColorCarta.Verde, partida.ColorActual);
+    }
+
+    [Fact]
+    public void JugarCarta_SinDecirUno_Roba2DeCastigo()
+    {
+        var partida = CrearPartida();
+        partida.Mazo.Crear();
+        partida.PonerCartaEnMesa(new Carta(ColorCarta.Rojo, TipoCarta.Numero, 5));
+        var carta = new Carta(ColorCarta.Rojo, TipoCarta.Numero, 8);
+        DarCartas(partida.Jugadores[0], carta, new Carta(ColorCarta.Azul, TipoCarta.Numero, 1));
+
+        partida.JugarCarta(carta);
+
+        Assert.Equal(3, partida.Jugadores[0].Mano.Count); // le quedaba 1 + 2 de castigo
+    }
+
+    [Fact]
+    public void JugarCarta_DiciendoUno_NoHayCastigo()
+    {
+        var partida = CrearPartida();
+        partida.Mazo.Crear();
+        partida.PonerCartaEnMesa(new Carta(ColorCarta.Rojo, TipoCarta.Numero, 5));
+        var carta = new Carta(ColorCarta.Rojo, TipoCarta.Numero, 8);
+        DarCartas(partida.Jugadores[0], carta, new Carta(ColorCarta.Azul, TipoCarta.Numero, 1));
+
+        partida.DecirUno();
+        partida.JugarCarta(carta);
+
+        Assert.Single(partida.Jugadores[0].Mano);
+    }
 }
