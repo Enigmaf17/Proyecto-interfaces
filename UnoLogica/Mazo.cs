@@ -3,6 +3,8 @@
     public class Mazo
     {
         private List<Carta> cartas = new List<Carta>();
+        private static readonly Random aleatorio = new Random();
+
         public int CantidadCartas => cartas.Count;
 
         public void Crear()
@@ -40,7 +42,19 @@
             }
         }
 
-        public void Barajar() { throw new NotImplementedException(); }
+        public void Barajar()
+        {
+            // De la última carta hacia la segunda
+            for (int i = cartas.Count - 1; i > 0; i--)
+            {
+                int j = aleatorio.Next(i + 1); // número al azar entre 0 e i
+
+                // Intercambiar la carta en i con la carta en j
+                Carta temporal = cartas[i];
+                cartas[i] = cartas[j];
+                cartas[j] = temporal;
+            }
+        }
 
         public Carta Robar() { throw new NotImplementedException(); }
 
