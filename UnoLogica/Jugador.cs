@@ -2,7 +2,7 @@
 {
     public class Jugador
     {
-        public int Id { get; }          // el mismo id que tiene en la base de datos
+        public int Id { get; }
         public string Nombre { get; }
         public List<Carta> Mano { get; } = new List<Carta>();
         public bool DijoUno { get; set; }
@@ -15,17 +15,17 @@
 
         public void RecibirCarta(Carta carta)
         {
-            throw new NotImplementedException();
+            Mano.Add(carta);
         }
 
         public void QuitarCarta(Carta carta)
         {
-            throw new NotImplementedException();
+            Mano.Remove(carta);
         }
 
         public bool SinCartas()
         {
-            throw new NotImplementedException();
+            return Mano.Count == 0;
         }
     }
 }
