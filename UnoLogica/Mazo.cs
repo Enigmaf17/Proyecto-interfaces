@@ -44,7 +44,7 @@
 
         public void Barajar()
         {
-            // De la última carta hacia la segunda
+            // Fisher-Yates: de la última carta hacia la segunda
             for (int i = cartas.Count - 1; i > 0; i--)
             {
                 int j = aleatorio.Next(i + 1); // número al azar entre 0 e i
@@ -56,8 +56,37 @@
             }
         }
 
-        public Carta Robar() { throw new NotImplementedException(); }
+        public Carta Robar()
+        {
+            if (cartas.Count == 0)
+            {
+                throw new InvalidOperationException("El mazo está vacío.");
+            }
 
-        public void Rellenar(List<Carta> descarte) { throw new NotImplementedException(); }
+            // La carta de arriba es la última de la lista
+            Carta carta = cartas[cartas.Count - 1];
+            cartas.RemoveAt(cartas.Count - 1);
+            return carta;
+        }
+
+        public void Rellenar(List<Carta> descarte)
+        {
+            // Si hay 0 o 1 carta en el descarte, no hay nada que pasar al mazo
+            if (descarte.Count <= 1)
+            {
+                return;
+            }
+
+            // Todas menos la última (la de arriba, que se queda en la mesa)
+            int cantidad = descarte.Count - 1;
+            List<Carta> paraElMazo = descarte.GetRange(0, cantidad);
+
+            // QUITARLAS del descarte para que no queden repetidas
+            descarte.RemoveRange(0, cantidad);
+
+            // Pasarlas al mazo y barajar
+            cartas.AddRange(paraElMazo);
+            Barajar();
+        }
     }
 }
