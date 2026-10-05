@@ -146,10 +146,19 @@
             PasarTurno();
         }
 
-        // El jugador en turno roba una carta del mazo
+        // El jugador en turno roba una carta del mazo.
+        // No pasa el turno: la interfaz decide si se juega la carta o se llama PasarTurno().
         public Carta RobarCarta()
         {
-            throw new NotImplementedException();
+            if (Ganador != null)
+                throw new InvalidOperationException("La partida ya terminó.");
+
+            if (Mazo.CantidadCartas == 0)
+                Mazo.Rellenar(Descarte);
+
+            Carta carta = Mazo.Robar();
+            JugadorEnTurno.RecibirCarta(carta);
+            return carta;
         }
 
         // El jugador indicado roba una cantidad de cartas del mazo
