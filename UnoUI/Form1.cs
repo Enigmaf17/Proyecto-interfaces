@@ -243,35 +243,50 @@ namespace UnoUI
         private async Task IniciarPartidaAsync()
         {
             partidaActiva = false;
-            MostrarMensaje("Conectando con la base de datos...");
+            Exception? error = null;
+
+            var carga = new FormCarga();
+            carga.MostrarSobre(this);
 
             try
             {
-                // Los jugadores vienen de la base de datos
+                // Para que la pantalla de carga se alcance a ver aunque todo sea muy rápido
+                Task tiempoMinimo = Task.Delay(1500);
+
+                carga.MostrarEstado("Conectando con la base de datos...");
                 List<JugadorDto> datos = await api.ObtenerJugadoresAsync();
                 if (datos.Count < 3)
-                {
-                    MessageBox.Show("La base de datos necesita al menos 3 jugadores.", "UNO");
-                    return;
-                }
+                    throw new Exception("La base de datos necesita al menos 3 jugadores.");
 
+                carga.MostrarEstado("Repartiendo cartas...");
                 List<Jugador> jugadores = datos
                     .Take(3)
                     .Select(d => new Jugador(d.Id, d.Nombre))
                     .ToList();
 
-                // Crea la partida en la base de datos, reparte y voltea la primera carta
                 await controlador.IniciarAsync(jugadores);
-
                 if (controlador.PartidaId <= 0)
                     throw new Exception("La API no pudo crear la partida. ¿Está prendido MySQL?");
+
+                carga.MostrarEstado("¡Listo!");
+                await tiempoMinimo;
             }
             catch (Exception ex)
+            {
+                error = ex;
+            }
+            finally
+            {
+                carga.Close();   // la pantalla de carga se cierra pase lo que pase
+                carga.Dispose();
+            }
+
+            if (error != null)
             {
                 DialogResult respuesta = MessageBox.Show(
                     "No se pudo conectar con la base de datos.\n\n" +
                     "Revisa que la API (uvicorn) y MySQL estén prendidos.\n\n" +
-                    $"Detalle: {ex.Message}",
+                    $"Detalle: {error.Message}",
                     "Error de conexión", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
 
                 if (respuesta == DialogResult.Retry)
