@@ -16,7 +16,7 @@ namespace UnoUI
             MaximizeBox = false;
             MinimizeBox = false;
             ControlBox = false;   // sin botón de cerrar: hay que elegir un color
-            BackColor = Color.FromArgb(55, 35, 105);
+            BackColor = Color.FromArgb(30, 33, 38);
 
             var titulo = new Label
             {
