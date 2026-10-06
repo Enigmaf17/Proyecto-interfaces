@@ -7,11 +7,13 @@ namespace UnoUI
     {
         // ===== Estado del juego =====
         private Partida partida = null!;
-        private ColorCarta colorMesa = ColorCarta.Verde;   // color con el que se pinta el óvalo
+        private ColorCarta colorActual = ColorCarta.Verde;   // color del anillo de la mesa
+        private bool juegoTerminado = false;
 
         // ===== Jugadores alrededor de la mesa =====
         // Jugador 0 = izquierda, 1 = arriba, 2 = derecha.
         // Así el sentido normal (0 → 1 → 2) gira como las manecillas del reloj.
+        private readonly Panel[] marcos = new Panel[3];                 // marco (dorado si es su turno)
         private readonly FlowLayoutPanel[] panelesManos = new FlowLayoutPanel[3];
         private readonly Label[] etiquetasNombres = new Label[3];
         private readonly Size[] tamanosCarta =
@@ -26,7 +28,9 @@ namespace UnoUI
         private readonly PictureBox picMazo = new PictureBox();
         private readonly PictureBox picDescarte = new PictureBox();
         private readonly Label lblMazo = new Label();
+        private readonly Label lblColor = new Label();
         private readonly Label lblTurno = new Label();
+        private readonly Label lblMensaje = new Label();
 
         // ===== Abajo =====
         private readonly Button btnUno = new Button();
@@ -38,12 +42,15 @@ namespace UnoUI
         private readonly Rectangle mesa = new Rectangle(220, 195, 840, 470);
 
         // ===== Colores =====
-        private static readonly Color FondoArriba = Color.FromArgb(55, 35, 105);   // morado
-        private static readonly Color FondoAbajo = Color.FromArgb(25, 85, 140);    // azul
-        private static readonly Color PanelNormal = Color.FromArgb(80, 65, 150);
-        private static readonly Color PanelTurno = Color.FromArgb(255, 200, 60);   // dorado
-        private static readonly Color Dorado = Color.FromArgb(255, 215, 80);
-        private static readonly Color Madera = Color.FromArgb(140, 85, 40);
+        private static readonly Color FondoOrilla = Color.FromArgb(14, 15, 18);     // casi negro
+        private static readonly Color FondoCentro = Color.FromArgb(40, 44, 50);     // luz suave al centro
+        private static readonly Color FieltroCentro = Color.FromArgb(40, 140, 80);  // verde claro
+        private static readonly Color FieltroOrilla = Color.FromArgb(18, 90, 50);   // verde oscuro
+        private static readonly Color Madera = Color.FromArgb(105, 65, 30);
+        private static readonly Color PanelFondo = Color.FromArgb(30, 33, 38);
+        private static readonly Color MarcoNormal = Color.FromArgb(60, 64, 72);
+        private static readonly Color Dorado = Color.FromArgb(255, 200, 60);
+        private static readonly Color TextoClaro = Color.FromArgb(225, 225, 230);
 
         public Form1()
         {
@@ -53,9 +60,9 @@ namespace UnoUI
             IniciarPartidaDePrueba();
         }
 
-        // ---------------------------------------------------------------
-        // Crea todos los controles de la ventana (solo se llama una vez)
-        // ---------------------------------------------------------------
+        // ===============================================================
+        //  CREACIÓN DE LA MESA (solo se llama una vez)
+        // ===============================================================
         private void CrearMesa()
         {
             Text = "UNO";
@@ -63,6 +70,7 @@ namespace UnoUI
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
+            BackColor = FondoOrilla;
             Paint += DibujarFondoYMesa;
 
             // ----- Jugadores -----
@@ -70,27 +78,30 @@ namespace UnoUI
             CrearJugador(1, new Point(230, 12), new Rectangle(230, 42, 820, 140), variasFilas: false);   // arriba
             CrearJugador(2, new Point(1085, 70), new Rectangle(1085, 100, 175, 560), variasFilas: true); // derecha
 
-            // ----- Flecha del sentido (centrada en la mesa) -----
+            // ----- Flecha del sentido -----
             lblFlecha.AutoSize = false;
             lblFlecha.Location = new Point(mesa.Left, 215);
             lblFlecha.Size = new Size(mesa.Width, 70);
             lblFlecha.TextAlign = ContentAlignment.MiddleCenter;
             lblFlecha.Font = new Font("Segoe UI Symbol", 40, FontStyle.Bold);
+            lblFlecha.ForeColor = Dorado;
             lblFlecha.BackColor = Color.Transparent;
 
-            // ----- Mazo (de donde se roba) -----
+            // ----- Mazo (clic = robar) -----
             picMazo.Location = new Point(520, 300);
             picMazo.Size = new Size(100, 150);
             picMazo.SizeMode = PictureBoxSizeMode.Zoom;
             picMazo.BackColor = Color.Transparent;
             picMazo.Image = ObtenerImagen("reverso.png");
             picMazo.Cursor = Cursors.Hand;
+            picMazo.Click += ClicEnMazo;
 
             lblMazo.AutoSize = false;
             lblMazo.Location = new Point(510, 452);
             lblMazo.Size = new Size(120, 24);
             lblMazo.TextAlign = ContentAlignment.MiddleCenter;
             lblMazo.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+            lblMazo.ForeColor = TextoClaro;
             lblMazo.BackColor = Color.Transparent;
 
             // ----- Carta de arriba del descarte -----
@@ -99,60 +110,90 @@ namespace UnoUI
             picDescarte.SizeMode = PictureBoxSizeMode.Zoom;
             picDescarte.BackColor = Color.Transparent;
 
-            // ----- Nombre del jugador en turno (grande, centrado) -----
+            lblColor.AutoSize = false;
+            lblColor.Location = new Point(650, 452);
+            lblColor.Size = new Size(120, 24);
+            lblColor.TextAlign = ContentAlignment.MiddleCenter;
+            lblColor.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+            lblColor.ForeColor = TextoClaro;
+            lblColor.BackColor = Color.Transparent;
+
+            // ----- Turno (grande, centrado) -----
             lblTurno.AutoSize = false;
             lblTurno.Location = new Point(mesa.Left, 495);
             lblTurno.Size = new Size(mesa.Width, 70);
             lblTurno.TextAlign = ContentAlignment.MiddleCenter;
             lblTurno.Font = new Font("Segoe UI", 28, FontStyle.Bold);
+            lblTurno.ForeColor = Color.White;
             lblTurno.BackColor = Color.Transparent;
+
+            // ----- Mensaje de lo que acaba de pasar -----
+            lblMensaje.AutoSize = false;
+            lblMensaje.Location = new Point(340, 568);
+            lblMensaje.Size = new Size(600, 46);
+            lblMensaje.TextAlign = ContentAlignment.TopCenter;
+            lblMensaje.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            lblMensaje.ForeColor = TextoClaro;
+            lblMensaje.BackColor = Color.Transparent;
 
             // ----- Botón UNO (abajo al centro) -----
             btnUno.Size = new Size(160, 55);
-            btnUno.Location = new Point((ClientSize.Width - btnUno.Width) / 2, 685);
+            btnUno.Location = new Point((ClientSize.Width - btnUno.Width) / 2, 690);
             btnUno.Text = "¡UNO!";
             btnUno.Font = new Font("Segoe UI", 18, FontStyle.Bold);
             btnUno.ForeColor = Color.White;
-            btnUno.BackColor = Color.FromArgb(235, 50, 50);   // rojo
+            btnUno.BackColor = Color.FromArgb(210, 40, 40);
             btnUno.FlatStyle = FlatStyle.Flat;
             btnUno.FlatAppearance.BorderColor = Dorado;
             btnUno.FlatAppearance.BorderSize = 3;
+            btnUno.FlatAppearance.MouseOverBackColor = Color.FromArgb(235, 60, 60);
             btnUno.Cursor = Cursors.Hand;
+            btnUno.Click += ClicEnUno;
 
             Controls.AddRange(new Control[]
             {
-                lblFlecha, picMazo, lblMazo, picDescarte, lblTurno, btnUno
+                lblFlecha, picMazo, lblMazo, picDescarte, lblColor, lblTurno, lblMensaje, btnUno
             });
         }
 
-        // Crea el nombre y el panel de cartas de un jugador
+        // Crea el nombre, el marco y el panel de cartas de un jugador.
+        // El marco es un panel un poco más grande detrás del de las cartas:
+        // lo que se ve de él alrededor funciona como borde.
         private void CrearJugador(int indice, Point posicionNombre, Rectangle zona, bool variasFilas)
         {
             etiquetasNombres[indice] = new Label
             {
                 Location = posicionNombre,
                 AutoSize = true,
-                ForeColor = Color.White,
+                ForeColor = TextoClaro,
                 BackColor = Color.Transparent,
                 Font = new Font("Segoe UI", 12, FontStyle.Bold)
             };
 
-            panelesManos[indice] = new FlowLayoutPanel
+            marcos[indice] = new Panel
             {
                 Location = zona.Location,
                 Size = zona.Size,
+                Padding = new Padding(3),   // grosor del borde
+                BackColor = MarcoNormal
+            };
+
+            panelesManos[indice] = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,       // llena todo el marco (menos el borde)
                 AutoScroll = true,           // aparece una barra si no caben las cartas
-                WrapContents = variasFilas,  // a los lados: varias filas; arriba: una sola fila
-                BackColor = PanelNormal,
+                WrapContents = variasFilas,
+                BackColor = PanelFondo,
                 Padding = new Padding(4)
             };
 
+            marcos[indice].Controls.Add(panelesManos[indice]);
             Controls.Add(etiquetasNombres[indice]);
-            Controls.Add(panelesManos[indice]);
+            Controls.Add(marcos[indice]);
         }
 
-        // Dibuja el fondo con degradado y la mesa ovalada del color actual.
-        // Windows llama a este método cada vez que repinta la ventana.
+        // Dibuja el fondo, la sombra, la mesa de fieltro, el borde de madera
+        // y el anillo del color actual. Windows lo llama cada vez que repinta.
         private void DibujarFondoYMesa(object? sender, PaintEventArgs e)
         {
             if (ClientRectangle.Width == 0 || ClientRectangle.Height == 0)
@@ -161,29 +202,50 @@ namespace UnoUI
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // Fondo: degradado de morado (arriba) a azul (abajo)
-            using (var fondo = new LinearGradientBrush(ClientRectangle, FondoArriba, FondoAbajo,
-                                                        LinearGradientMode.Vertical))
+            // 1. Fondo oscuro con una luz suave en el centro
+            using (var zonaLuz = new GraphicsPath())
             {
-                g.FillRectangle(fondo, ClientRectangle);
+                zonaLuz.AddEllipse(-200, -150, ClientSize.Width + 400, ClientSize.Height + 300);
+                using var luz = new PathGradientBrush(zonaLuz)
+                {
+                    CenterColor = FondoCentro,
+                    SurroundColors = new[] { FondoOrilla }
+                };
+                g.FillPath(luz, zonaLuz);
             }
 
-            // Mesa: óvalo del color actual, borde de madera y un brillo interior
-            using var relleno = new SolidBrush(ColorDeMesa(colorMesa));
-            using var borde = new Pen(Madera, 14);
-            using var brillo = new Pen(Color.FromArgb(90, Color.White), 3);
+            // 2. Sombra debajo de la mesa
+            Rectangle sombra = mesa;
+            sombra.Offset(0, 12);
+            using (var pincelSombra = new SolidBrush(Color.FromArgb(140, 0, 0, 0)))
+                g.FillEllipse(pincelSombra, sombra);
 
-            g.FillEllipse(relleno, mesa);
-            g.DrawEllipse(borde, mesa);
+            // 3. Fieltro verde, más claro al centro
+            using (var forma = new GraphicsPath())
+            {
+                forma.AddEllipse(mesa);
+                using var fieltro = new PathGradientBrush(forma)
+                {
+                    CenterColor = FieltroCentro,
+                    SurroundColors = new[] { FieltroOrilla }
+                };
+                g.FillPath(fieltro, forma);
+            }
 
-            Rectangle interior = mesa;
-            interior.Inflate(-22, -22);   // un óvalo un poco más chico, para el brillo
-            g.DrawEllipse(brillo, interior);
+            // 4. Borde de madera
+            using (var madera = new Pen(Madera, 16))
+                g.DrawEllipse(madera, mesa);
+
+            // 5. Anillo del color actual, por dentro de la madera
+            Rectangle anillo = mesa;
+            anillo.Inflate(-15, -15);
+            using (var pincelColor = new Pen(ColorDePantalla(colorActual), 7))
+                g.DrawEllipse(pincelColor, anillo);
         }
 
-        // ---------------------------------------------------------------
-        // Partida de prueba (en la fase 3 se cambia por la base de datos)
-        // ---------------------------------------------------------------
+        // ===============================================================
+        //  PARTIDA (en la fase 3 se conecta con la base de datos)
+        // ===============================================================
         private void IniciarPartidaDePrueba()
         {
             var jugadores = new List<Jugador>
@@ -195,46 +257,188 @@ namespace UnoUI
 
             partida = new Partida(jugadores);
             partida.Iniciar();
+            juegoTerminado = false;
+
             ActualizarPantalla();
+            MostrarMensaje("¡Empieza la partida!");
         }
 
-        // ---------------------------------------------------------------
+        // ===============================================================
+        //  ACCIONES DEL JUGADOR
+        // ===============================================================
+
+        // Clic en una carta de cualquier mano
+        private void ClicEnCarta(object? sender, EventArgs e)
+        {
+            if (juegoTerminado) return;
+            if (sender is not PictureBox pic || pic.Tag is not Carta carta) return;
+
+            Jugador jugador = partida.JugadorEnTurno;
+            if (!jugador.Mano.Contains(carta))
+            {
+                MostrarMensaje($"No es tu turno: le toca a {jugador.Nombre}.");
+                return;
+            }
+
+            JugarCartaDelJugador(carta);
+        }
+
+        // Clic en el mazo: robar una carta
+        private void ClicEnMazo(object? sender, EventArgs e)
+        {
+            if (juegoTerminado) return;
+
+            Jugador jugador = partida.JugadorEnTurno;
+            Carta robada;
+            try
+            {
+                robada = partida.RobarCarta();
+            }
+            catch (InvalidOperationException ex)
+            {
+                MostrarMensaje(ex.Message);
+                return;
+            }
+
+            ActualizarPantalla();
+
+            // Si la carta robada se puede jugar, preguntar si quiere tirarla
+            if (partida.PuedeJugar(robada))
+            {
+                DialogResult respuesta = MessageBox.Show(
+                    $"{jugador.Nombre}, robaste {Describir(robada)} y la puedes jugar.\n\n¿Quieres tirarla?",
+                    "Carta robada", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                if (respuesta == DialogResult.Yes)
+                {
+                    JugarCartaDelJugador(robada);
+                    return;
+                }
+            }
+
+            // Si no se puede (o no quiso), pasa el turno
+            partida.PasarTurno();
+            ActualizarPantalla();
+            MostrarMensaje($"{jugador.Nombre} robó una carta y pasó.");
+        }
+
+        // Botón UNO
+        private void ClicEnUno(object? sender, EventArgs e)
+        {
+            if (juegoTerminado) return;
+
+            Jugador jugador = partida.JugadorEnTurno;
+            if (jugador.Mano.Count != 2)
+            {
+                MostrarMensaje("UNO se dice cuando te quedan 2 cartas, antes de tirar la penúltima.");
+                return;
+            }
+
+            partida.DecirUno();
+            MostrarMensaje($"¡{jugador.Nombre} dijo UNO!");
+        }
+
+        // Juega una carta del jugador en turno (desde la mano o recién robada)
+        private void JugarCartaDelJugador(Carta carta)
+        {
+            if (!partida.PuedeJugar(carta))
+            {
+                MostrarMensaje($"No puedes tirar {Describir(carta)} sobre {Describir(partida.CartaArriba())}.");
+                return;
+            }
+
+            ColorCarta? colorElegido = null;
+            if (EsComodin(carta))
+                colorElegido = PedirColor();
+
+            // Guardamos esto ANTES de jugar, para saber si hubo castigo por no decir UNO
+            Jugador jugador = partida.JugadorEnTurno;
+            int cartasAntes = jugador.Mano.Count;
+            bool dijoUno = jugador.DijoUno;
+
+            try
+            {
+                partida.JugarCarta(carta, colorElegido);
+            }
+            catch (InvalidOperationException ex)
+            {
+                MostrarMensaje(ex.Message);
+                return;
+            }
+
+            string mensaje = $"{jugador.Nombre} jugó {Describir(carta)}";
+            if (colorElegido != null)
+                mensaje += $" y eligió {colorElegido.Value.ToString().ToLower()}";
+            if (cartasAntes == 2 && !dijoUno)
+                mensaje += ". ¡No dijo UNO! Roba 2 cartas";
+
+            ActualizarPantalla();
+            MostrarMensaje(mensaje);
+            RevisarGanador();
+        }
+
+        // Abre la ventanita para elegir color y regresa el color elegido
+        private ColorCarta PedirColor()
+        {
+            using var ventana = new FormElegirColor();
+            ventana.ShowDialog(this);
+            return ventana.ColorElegido;
+        }
+
+        // Si alguien ganó, avisa y ofrece jugar otra vez
+        private void RevisarGanador()
+        {
+            if (partida.Ganador == null) return;
+
+            juegoTerminado = true;
+            ActualizarPantalla();   // quita el resaltado de turno
+            lblTurno.Text = $"¡Ganó {partida.Ganador.Nombre}!";
+            lblTurno.ForeColor = Dorado;
+
+            DialogResult respuesta = MessageBox.Show(
+                $"¡{partida.Ganador.Nombre} ganó la partida!\n\n¿Jugar otra vez?",
+                "Fin de la partida", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+
+            if (respuesta == DialogResult.Yes)
+                IniciarPartidaDePrueba();
+        }
+
+        // ===============================================================
+        //  DIBUJO
+        // ===============================================================
+
         // Redibuja toda la mesa leyendo el estado de la partida
-        // ---------------------------------------------------------------
         private void ActualizarPantalla()
         {
-            // Jugadores
             for (int i = 0; i < 3; i++)
             {
                 Jugador jugador = partida.Jugadores[i];
-                bool enTurno = i == partida.TurnoActual;
+                bool enTurno = i == partida.TurnoActual && !juegoTerminado;
 
                 etiquetasNombres[i].Text = enTurno
                     ? $"▶ {jugador.Nombre} ({jugador.Mano.Count})"
                     : $"{jugador.Nombre} ({jugador.Mano.Count})";
-                etiquetasNombres[i].ForeColor = enTurno ? Dorado : Color.White;
-                panelesManos[i].BackColor = enTurno ? PanelTurno : PanelNormal;
+                etiquetasNombres[i].ForeColor = enTurno ? Dorado : TextoClaro;
+                marcos[i].BackColor = enTurno ? Dorado : MarcoNormal;
 
-                MostrarMano(jugador, panelesManos[i], tamanosCarta[i]);
+                MostrarMano(jugador, panelesManos[i], tamanosCarta[i], enTurno);
             }
 
-            // Centro de la mesa
-            colorMesa = partida.ColorActual;
-            Color texto = ColorDeTexto(colorMesa);
+            colorActual = partida.ColorActual;
 
             picDescarte.Image = ObtenerImagen(partida.CartaArriba().NombreImagen());
             lblMazo.Text = $"Mazo: {partida.Mazo.CantidadCartas}";
-            lblMazo.ForeColor = texto;
+            lblColor.Text = $"Color: {colorActual.ToString().ToLower()}";
             lblFlecha.Text = partida.SentidoHorario ? "↻" : "↺";
-            lblFlecha.ForeColor = texto;
             lblTurno.Text = $"Turno de {partida.JugadorEnTurno.Nombre}";
-            lblTurno.ForeColor = texto;
+            lblTurno.ForeColor = Color.White;
 
-            Invalidate(true);   // repinta la ventana para que el óvalo tome el nuevo color
+            Invalidate(true);   // repinta para que el anillo tome el nuevo color
         }
 
-        // Pone un PictureBox por cada carta de la mano del jugador
-        private void MostrarMano(Jugador jugador, FlowLayoutPanel panel, Size tamano)
+        // Pone un PictureBox por cada carta. Si es el jugador en turno,
+        // las cartas que sí se pueden jugar llevan un borde blanco.
+        private void MostrarMano(Jugador jugador, FlowLayoutPanel panel, Size tamano, bool enTurno)
         {
             panel.SuspendLayout();
 
@@ -247,20 +451,34 @@ namespace UnoUI
 
             foreach (Carta carta in jugador.Mano)
             {
+                bool sePuedeJugar = enTurno && partida.PuedeJugar(carta);
+
                 var pic = new PictureBox
                 {
                     Size = tamano,
                     SizeMode = PictureBoxSizeMode.Zoom,
                     Image = ObtenerImagen(carta.NombreImagen()),
-                    Tag = carta,   // la carta, para saber cuál se tocó (fase 2)
-                    Cursor = Cursors.Hand,
-                    Margin = new Padding(3)
+                    Tag = carta,   // la carta, para saber cuál se tocó
+                    Cursor = enTurno ? Cursors.Hand : Cursors.Default,
+                    Margin = new Padding(3),
+                    Padding = sePuedeJugar ? new Padding(3) : new Padding(0),
+                    BackColor = sePuedeJugar ? Color.White : Color.Transparent
                 };
+                pic.Click += ClicEnCarta;
                 panel.Controls.Add(pic);
             }
 
             panel.ResumeLayout();
         }
+
+        private void MostrarMensaje(string texto)
+        {
+            lblMensaje.Text = texto;
+        }
+
+        // ===============================================================
+        //  AYUDANTES
+        // ===============================================================
 
         // Carga una imagen de la carpeta Imagenes (solo la primera vez)
         private Image ObtenerImagen(string nombreArchivo)
@@ -274,23 +492,37 @@ namespace UnoUI
             return imagen;
         }
 
-        // Color con el que se pinta la mesa según el color actual del juego
-        private static Color ColorDeMesa(ColorCarta color)
+        // Texto corto de una carta, por ejemplo "5 rojo" o "+2 azul"
+        private static string Describir(Carta carta)
         {
-            return color switch
+            string color = carta.Color.ToString().ToLower();
+            return carta.Tipo switch
             {
-                ColorCarta.Rojo => Color.FromArgb(230, 70, 70),
-                ColorCarta.Amarillo => Color.FromArgb(245, 205, 50),
-                ColorCarta.Verde => Color.FromArgb(60, 180, 95),
-                ColorCarta.Azul => Color.FromArgb(50, 130, 230),
-                _ => Color.FromArgb(60, 60, 60)
+                TipoCarta.Numero => $"{carta.Numero} {color}",
+                TipoCarta.Salta => $"Salta {color}",
+                TipoCarta.Reversa => $"Reversa {color}",
+                TipoCarta.MasDos => $"+2 {color}",
+                TipoCarta.Comodin => "Comodín",
+                _ => "Comodín +4"
             };
         }
 
-        // Sobre la mesa amarilla el texto blanco no se lee, así que ahí se usa oscuro
-        private static Color ColorDeTexto(ColorCarta color)
+        private static bool EsComodin(Carta carta)
         {
-            return color == ColorCarta.Amarillo ? Color.FromArgb(50, 40, 20) : Color.White;
+            return carta.Tipo == TipoCarta.Comodin || carta.Tipo == TipoCarta.ComodinMasCuatro;
+        }
+
+        // Convierte el color del juego a un color de pantalla
+        private static Color ColorDePantalla(ColorCarta color)
+        {
+            return color switch
+            {
+                ColorCarta.Rojo => Color.FromArgb(235, 60, 60),
+                ColorCarta.Amarillo => Color.FromArgb(250, 210, 50),
+                ColorCarta.Verde => Color.FromArgb(90, 220, 120),
+                ColorCarta.Azul => Color.FromArgb(60, 140, 240),
+                _ => Color.Gray
+            };
         }
     }
 }
