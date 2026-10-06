@@ -20,7 +20,36 @@
         // Crea y baraja el mazo, reparte 7 cartas a cada jugador y voltea la primera carta
         public void Iniciar()
         {
-            throw new NotImplementedException();
+            Mazo.Crear();
+            Mazo.Barajar();
+
+            Descarte.Clear();
+            TurnoActual = 0;
+            SentidoHorario = true;
+            Ganador = null;
+
+            foreach (Jugador jugador in Jugadores)
+            {
+                jugador.Mano.Clear();
+                jugador.DijoUno = false;
+            }
+
+            // Repartir de una en una, como en la vida real
+            for (int i = 0; i < 7; i++)
+            {
+                foreach (Jugador jugador in Jugadores)
+                    jugador.RecibirCarta(Mazo.Robar());
+            }
+
+            // La primera carta de la mesa siempre es de número.
+            // Si sale una especial, se queda abajo en la pila y se voltea otra.
+            Carta primera = Mazo.Robar();
+            while (primera.Tipo != TipoCarta.Numero)
+            {
+                Descarte.Add(primera);
+                primera = Mazo.Robar();
+            }
+            PonerCartaEnMesa(primera);
         }
 
         // Devuelve la carta de arriba de la pila de descarte
@@ -117,10 +146,19 @@
             PasarTurno();
         }
 
-        // El jugador en turno roba una carta del mazo
+        // El jugador en turno roba una carta del mazo.
+        // No pasa el turno: la interfaz decide si se juega la carta o se llama PasarTurno().
         public Carta RobarCarta()
         {
-            throw new NotImplementedException();
+            if (Ganador != null)
+                throw new InvalidOperationException("La partida ya terminó.");
+
+            if (Mazo.CantidadCartas == 0)
+                Mazo.Rellenar(Descarte);
+
+            Carta carta = Mazo.Robar();
+            JugadorEnTurno.RecibirCarta(carta);
+            return carta;
         }
 
         // El jugador indicado roba una cantidad de cartas del mazo
