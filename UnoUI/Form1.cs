@@ -5,15 +5,22 @@ namespace UnoUI
 {
     public partial class Form1 : Form
     {
-        // ===== Estado del juego =====
-        private Partida partida = null!;
+        // ===== Conexión con la base de datos =====
+        private readonly ApiCliente api = new ApiCliente();
+        private readonly ControladorPartida controlador;
+
+        // Atajo: "partida" es la Partida que maneja el controlador.
+        // Así el resto del código la lee igual que antes.
+        private Partida partida => controlador.Partida;
+
+        // ===== Estado de la ventana =====
         private ColorCarta colorActual = ColorCarta.Verde;   // color del anillo de la mesa
-        private bool juegoTerminado = false;
+        private bool partidaActiva = false;   // false = todavía no empieza o ya terminó
+        private bool ocupado = false;         // true mientras esperamos a la base de datos
 
         // ===== Jugadores alrededor de la mesa =====
         // Jugador 0 = izquierda, 1 = arriba, 2 = derecha.
-        // Así el sentido normal (0 → 1 → 2) gira como las manecillas del reloj.
-        private readonly Panel[] marcos = new Panel[3];                 // marco (dorado si es su turno)
+        private readonly Panel[] marcos = new Panel[3];
         private readonly FlowLayoutPanel[] panelesManos = new FlowLayoutPanel[3];
         private readonly Label[] etiquetasNombres = new Label[3];
         private readonly Size[] tamanosCarta =
@@ -42,10 +49,10 @@ namespace UnoUI
         private readonly Rectangle mesa = new Rectangle(220, 195, 840, 470);
 
         // ===== Colores =====
-        private static readonly Color FondoOrilla = Color.FromArgb(14, 15, 18);     // casi negro
-        private static readonly Color FondoCentro = Color.FromArgb(40, 44, 50);     // luz suave al centro
-        private static readonly Color FieltroCentro = Color.FromArgb(40, 140, 80);  // verde claro
-        private static readonly Color FieltroOrilla = Color.FromArgb(18, 90, 50);   // verde oscuro
+        private static readonly Color FondoOrilla = Color.FromArgb(14, 15, 18);
+        private static readonly Color FondoCentro = Color.FromArgb(40, 44, 50);
+        private static readonly Color FieltroCentro = Color.FromArgb(40, 140, 80);
+        private static readonly Color FieltroOrilla = Color.FromArgb(18, 90, 50);
         private static readonly Color Madera = Color.FromArgb(105, 65, 30);
         private static readonly Color PanelFondo = Color.FromArgb(30, 33, 38);
         private static readonly Color MarcoNormal = Color.FromArgb(60, 64, 72);
@@ -55,9 +62,12 @@ namespace UnoUI
         public Form1()
         {
             InitializeComponent();
-            DoubleBuffered = true;   // evita parpadeos al redibujar
+            DoubleBuffered = true;
+            controlador = new ControladorPartida(api);
             CrearMesa();
-            IniciarPartidaDePrueba();
+
+            // Cuando la ventana ya se ve, empezamos la partida (necesita la base de datos)
+            Shown += async (s, e) => await IniciarPartidaAsync();
         }
 
         // ===============================================================
@@ -73,12 +83,10 @@ namespace UnoUI
             BackColor = FondoOrilla;
             Paint += DibujarFondoYMesa;
 
-            // ----- Jugadores -----
-            CrearJugador(0, new Point(20, 70), new Rectangle(20, 100, 175, 560), variasFilas: true);     // izquierda
-            CrearJugador(1, new Point(230, 12), new Rectangle(230, 42, 820, 140), variasFilas: false);   // arriba
-            CrearJugador(2, new Point(1085, 70), new Rectangle(1085, 100, 175, 560), variasFilas: true); // derecha
+            CrearJugador(0, new Point(20, 70), new Rectangle(20, 100, 175, 560), variasFilas: true);
+            CrearJugador(1, new Point(230, 12), new Rectangle(230, 42, 820, 140), variasFilas: false);
+            CrearJugador(2, new Point(1085, 70), new Rectangle(1085, 100, 175, 560), variasFilas: true);
 
-            // ----- Flecha del sentido -----
             lblFlecha.AutoSize = false;
             lblFlecha.Location = new Point(mesa.Left, 215);
             lblFlecha.Size = new Size(mesa.Width, 70);
@@ -87,7 +95,6 @@ namespace UnoUI
             lblFlecha.ForeColor = Dorado;
             lblFlecha.BackColor = Color.Transparent;
 
-            // ----- Mazo (clic = robar) -----
             picMazo.Location = new Point(520, 300);
             picMazo.Size = new Size(100, 150);
             picMazo.SizeMode = PictureBoxSizeMode.Zoom;
@@ -104,7 +111,6 @@ namespace UnoUI
             lblMazo.ForeColor = TextoClaro;
             lblMazo.BackColor = Color.Transparent;
 
-            // ----- Carta de arriba del descarte -----
             picDescarte.Location = new Point(660, 300);
             picDescarte.Size = new Size(100, 150);
             picDescarte.SizeMode = PictureBoxSizeMode.Zoom;
@@ -118,7 +124,6 @@ namespace UnoUI
             lblColor.ForeColor = TextoClaro;
             lblColor.BackColor = Color.Transparent;
 
-            // ----- Turno (grande, centrado) -----
             lblTurno.AutoSize = false;
             lblTurno.Location = new Point(mesa.Left, 495);
             lblTurno.Size = new Size(mesa.Width, 70);
@@ -127,7 +132,6 @@ namespace UnoUI
             lblTurno.ForeColor = Color.White;
             lblTurno.BackColor = Color.Transparent;
 
-            // ----- Mensaje de lo que acaba de pasar -----
             lblMensaje.AutoSize = false;
             lblMensaje.Location = new Point(340, 568);
             lblMensaje.Size = new Size(600, 46);
@@ -136,7 +140,6 @@ namespace UnoUI
             lblMensaje.ForeColor = TextoClaro;
             lblMensaje.BackColor = Color.Transparent;
 
-            // ----- Botón UNO (abajo al centro) -----
             btnUno.Size = new Size(160, 55);
             btnUno.Location = new Point((ClientSize.Width - btnUno.Width) / 2, 690);
             btnUno.Text = "¡UNO!";
@@ -156,9 +159,6 @@ namespace UnoUI
             });
         }
 
-        // Crea el nombre, el marco y el panel de cartas de un jugador.
-        // El marco es un panel un poco más grande detrás del de las cartas:
-        // lo que se ve de él alrededor funciona como borde.
         private void CrearJugador(int indice, Point posicionNombre, Rectangle zona, bool variasFilas)
         {
             etiquetasNombres[indice] = new Label
@@ -174,14 +174,14 @@ namespace UnoUI
             {
                 Location = zona.Location,
                 Size = zona.Size,
-                Padding = new Padding(3),   // grosor del borde
+                Padding = new Padding(3),
                 BackColor = MarcoNormal
             };
 
             panelesManos[indice] = new FlowLayoutPanel
             {
-                Dock = DockStyle.Fill,       // llena todo el marco (menos el borde)
-                AutoScroll = true,           // aparece una barra si no caben las cartas
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
                 WrapContents = variasFilas,
                 BackColor = PanelFondo,
                 Padding = new Padding(4)
@@ -192,17 +192,14 @@ namespace UnoUI
             Controls.Add(marcos[indice]);
         }
 
-        // Dibuja el fondo, la sombra, la mesa de fieltro, el borde de madera
-        // y el anillo del color actual. Windows lo llama cada vez que repinta.
         private void DibujarFondoYMesa(object? sender, PaintEventArgs e)
         {
             if (ClientRectangle.Width == 0 || ClientRectangle.Height == 0)
-                return;   // la ventana está minimizada
+                return;
 
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // 1. Fondo oscuro con una luz suave en el centro
             using (var zonaLuz = new GraphicsPath())
             {
                 zonaLuz.AddEllipse(-200, -150, ClientSize.Width + 400, ClientSize.Height + 300);
@@ -214,13 +211,11 @@ namespace UnoUI
                 g.FillPath(luz, zonaLuz);
             }
 
-            // 2. Sombra debajo de la mesa
             Rectangle sombra = mesa;
             sombra.Offset(0, 12);
             using (var pincelSombra = new SolidBrush(Color.FromArgb(140, 0, 0, 0)))
                 g.FillEllipse(pincelSombra, sombra);
 
-            // 3. Fieltro verde, más claro al centro
             using (var forma = new GraphicsPath())
             {
                 forma.AddEllipse(mesa);
@@ -232,11 +227,9 @@ namespace UnoUI
                 g.FillPath(fieltro, forma);
             }
 
-            // 4. Borde de madera
             using (var madera = new Pen(Madera, 16))
                 g.DrawEllipse(madera, mesa);
 
-            // 5. Anillo del color actual, por dentro de la madera
             Rectangle anillo = mesa;
             anillo.Inflate(-15, -15);
             using (var pincelColor = new Pen(ColorDePantalla(colorActual), 7))
@@ -244,21 +237,51 @@ namespace UnoUI
         }
 
         // ===============================================================
-        //  PARTIDA (en la fase 3 se conecta con la base de datos)
+        //  INICIO DE LA PARTIDA (con la base de datos)
         // ===============================================================
-        private void IniciarPartidaDePrueba()
+        private async Task IniciarPartidaAsync()
         {
-            var jugadores = new List<Jugador>
+            partidaActiva = false;
+            MostrarMensaje("Conectando con la base de datos...");
+
+            try
             {
-                new Jugador(1, "Paul"),
-                new Jugador(2, "Rosa"),
-                new Jugador(3, "Dalton")
-            };
+                // Los jugadores vienen de la base de datos
+                List<JugadorDto> datos = await api.ObtenerJugadoresAsync();
+                if (datos.Count < 3)
+                {
+                    MessageBox.Show("La base de datos necesita al menos 3 jugadores.", "UNO");
+                    return;
+                }
 
-            partida = new Partida(jugadores);
-            partida.Iniciar();
-            juegoTerminado = false;
+                List<Jugador> jugadores = datos
+                    .Take(3)
+                    .Select(d => new Jugador(d.Id, d.Nombre))
+                    .ToList();
 
+                // Crea la partida en la base de datos, reparte y voltea la primera carta
+                await controlador.IniciarAsync(jugadores);
+
+                if (controlador.PartidaId <= 0)
+                    throw new Exception("La API no pudo crear la partida. ¿Está prendido MySQL?");
+            }
+            catch (Exception ex)
+            {
+                DialogResult respuesta = MessageBox.Show(
+                    "No se pudo conectar con la base de datos.\n\n" +
+                    "Revisa que la API (uvicorn) y MySQL estén prendidos.\n\n" +
+                    $"Detalle: {ex.Message}",
+                    "Error de conexión", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
+
+                if (respuesta == DialogResult.Retry)
+                    await IniciarPartidaAsync();
+                else
+                    Close();
+                return;
+            }
+
+            partidaActiva = true;
+            Text = $"UNO — Partida #{controlador.PartidaId}";
             ActualizarPantalla();
             MostrarMensaje("¡Empieza la partida!");
         }
@@ -267,10 +290,40 @@ namespace UnoUI
         //  ACCIONES DEL JUGADOR
         // ===============================================================
 
-        // Clic en una carta de cualquier mano
-        private void ClicEnCarta(object? sender, EventArgs e)
+        // ¿Se puede hacer algo ahorita? (hay partida y no estamos esperando a la base de datos)
+        private bool PuedeActuar() => partidaActiva && !ocupado;
+
+        // Ejecuta una acción del jugador: evita dobles clics mientras se guarda,
+        // maneja los errores y al final revisa si alguien ganó.
+        private async Task EjecutarAsync(Func<Task> accion)
         {
-            if (juegoTerminado) return;
+            ocupado = true;
+            try
+            {
+                await accion();
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Error de las reglas (jugada no válida)
+                MostrarMensaje(ex.Message);
+            }
+            catch (Exception)
+            {
+                // Error de conexión: la jugada sí se hizo, pero no se pudo guardar
+                ActualizarPantalla();
+                MostrarMensaje("⚠ No se pudo guardar en la base de datos. ¿Sigue prendida la API?");
+            }
+            finally
+            {
+                ocupado = false;
+            }
+
+            await RevisarGanadorAsync();
+        }
+
+        private async void ClicEnCarta(object? sender, EventArgs e)
+        {
+            if (!PuedeActuar()) return;
             if (sender is not PictureBox pic || pic.Tag is not Carta carta) return;
 
             Jugador jugador = partida.JugadorEnTurno;
@@ -280,52 +333,18 @@ namespace UnoUI
                 return;
             }
 
-            JugarCartaDelJugador(carta);
+            await EjecutarAsync(() => JugarCartaDelJugadorAsync(carta));
         }
 
-        // Clic en el mazo: robar una carta
-        private void ClicEnMazo(object? sender, EventArgs e)
+        private async void ClicEnMazo(object? sender, EventArgs e)
         {
-            if (juegoTerminado) return;
-
-            Jugador jugador = partida.JugadorEnTurno;
-            Carta robada;
-            try
-            {
-                robada = partida.RobarCarta();
-            }
-            catch (InvalidOperationException ex)
-            {
-                MostrarMensaje(ex.Message);
-                return;
-            }
-
-            ActualizarPantalla();
-
-            // Si la carta robada se puede jugar, preguntar si quiere tirarla
-            if (partida.PuedeJugar(robada))
-            {
-                DialogResult respuesta = MessageBox.Show(
-                    $"{jugador.Nombre}, robaste {Describir(robada)} y la puedes jugar.\n\n¿Quieres tirarla?",
-                    "Carta robada", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-                if (respuesta == DialogResult.Yes)
-                {
-                    JugarCartaDelJugador(robada);
-                    return;
-                }
-            }
-
-            // Si no se puede (o no quiso), pasa el turno
-            partida.PasarTurno();
-            ActualizarPantalla();
-            MostrarMensaje($"{jugador.Nombre} robó una carta y pasó.");
+            if (!PuedeActuar()) return;
+            await EjecutarAsync(RobarAsync);
         }
 
-        // Botón UNO
-        private void ClicEnUno(object? sender, EventArgs e)
+        private async void ClicEnUno(object? sender, EventArgs e)
         {
-            if (juegoTerminado) return;
+            if (!PuedeActuar()) return;
 
             Jugador jugador = partida.JugadorEnTurno;
             if (jugador.Mano.Count != 2)
@@ -334,12 +353,40 @@ namespace UnoUI
                 return;
             }
 
-            partida.DecirUno();
-            MostrarMensaje($"¡{jugador.Nombre} dijo UNO!");
+            await EjecutarAsync(async () =>
+            {
+                await controlador.DecirUnoAsync();
+                MostrarMensaje($"¡{jugador.Nombre} dijo UNO!");
+            });
+        }
+
+        // Robar del mazo; si la carta se puede jugar, preguntar si la tira
+        private async Task RobarAsync()
+        {
+            Jugador jugador = partida.JugadorEnTurno;
+            Carta robada = await controlador.RobarCartaAsync();
+            ActualizarPantalla();
+
+            if (partida.PuedeJugar(robada))
+            {
+                DialogResult respuesta = MessageBox.Show(
+                    $"{jugador.Nombre}, robaste {Describir(robada)} y la puedes jugar.\n\n¿Quieres tirarla?",
+                    "Carta robada", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                if (respuesta == DialogResult.Yes)
+                {
+                    await JugarCartaDelJugadorAsync(robada);
+                    return;
+                }
+            }
+
+            await controlador.PasarTurnoAsync();
+            ActualizarPantalla();
+            MostrarMensaje($"{jugador.Nombre} robó una carta y pasó.");
         }
 
         // Juega una carta del jugador en turno (desde la mano o recién robada)
-        private void JugarCartaDelJugador(Carta carta)
+        private async Task JugarCartaDelJugadorAsync(Carta carta)
         {
             if (!partida.PuedeJugar(carta))
             {
@@ -347,24 +394,15 @@ namespace UnoUI
                 return;
             }
 
-            ColorCarta? colorElegido = null;
-            if (EsComodin(carta))
-                colorElegido = PedirColor();
+            ColorCarta? colorElegido = EsComodin(carta) ? PedirColor() : null;
 
             // Guardamos esto ANTES de jugar, para saber si hubo castigo por no decir UNO
             Jugador jugador = partida.JugadorEnTurno;
             int cartasAntes = jugador.Mano.Count;
             bool dijoUno = jugador.DijoUno;
 
-            try
-            {
-                partida.JugarCarta(carta, colorElegido);
-            }
-            catch (InvalidOperationException ex)
-            {
-                MostrarMensaje(ex.Message);
-                return;
-            }
+            // Aplica la regla Y guarda el movimiento en la base de datos
+            await controlador.JugarCartaAsync(carta, colorElegido);
 
             string mensaje = $"{jugador.Nombre} jugó {Describir(carta)}";
             if (colorElegido != null)
@@ -374,10 +412,8 @@ namespace UnoUI
 
             ActualizarPantalla();
             MostrarMensaje(mensaje);
-            RevisarGanador();
         }
 
-        // Abre la ventanita para elegir color y regresa el color elegido
         private ColorCarta PedirColor()
         {
             using var ventana = new FormElegirColor();
@@ -385,35 +421,35 @@ namespace UnoUI
             return ventana.ColorElegido;
         }
 
-        // Si alguien ganó, avisa y ofrece jugar otra vez
-        private void RevisarGanador()
+        // Si alguien ganó, avisa y ofrece jugar otra vez.
+        // (ControladorPartida ya guardó al ganador en la base de datos)
+        private async Task RevisarGanadorAsync()
         {
-            if (partida.Ganador == null) return;
+            if (!partidaActiva || partida.Ganador == null) return;
 
-            juegoTerminado = true;
-            ActualizarPantalla();   // quita el resaltado de turno
+            partidaActiva = false;
+            ActualizarPantalla();
             lblTurno.Text = $"¡Ganó {partida.Ganador.Nombre}!";
             lblTurno.ForeColor = Dorado;
 
             DialogResult respuesta = MessageBox.Show(
-                $"¡{partida.Ganador.Nombre} ganó la partida!\n\n¿Jugar otra vez?",
+                $"¡{partida.Ganador.Nombre} ganó la partida!\n\n" +
+                "El resultado ya se guardó en la base de datos.\n\n¿Jugar otra vez?",
                 "Fin de la partida", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
 
             if (respuesta == DialogResult.Yes)
-                IniciarPartidaDePrueba();
+                await IniciarPartidaAsync();
         }
 
         // ===============================================================
         //  DIBUJO
         // ===============================================================
-
-        // Redibuja toda la mesa leyendo el estado de la partida
         private void ActualizarPantalla()
         {
             for (int i = 0; i < 3; i++)
             {
                 Jugador jugador = partida.Jugadores[i];
-                bool enTurno = i == partida.TurnoActual && !juegoTerminado;
+                bool enTurno = i == partida.TurnoActual && partidaActiva;
 
                 etiquetasNombres[i].Text = enTurno
                     ? $"▶ {jugador.Nombre} ({jugador.Mano.Count})"
@@ -433,11 +469,9 @@ namespace UnoUI
             lblTurno.Text = $"Turno de {partida.JugadorEnTurno.Nombre}";
             lblTurno.ForeColor = Color.White;
 
-            Invalidate(true);   // repinta para que el anillo tome el nuevo color
+            Invalidate(true);
         }
 
-        // Pone un PictureBox por cada carta. Si es el jugador en turno,
-        // las cartas que sí se pueden jugar llevan un borde blanco.
         private void MostrarMano(Jugador jugador, FlowLayoutPanel panel, Size tamano, bool enTurno)
         {
             panel.SuspendLayout();
@@ -458,7 +492,7 @@ namespace UnoUI
                     Size = tamano,
                     SizeMode = PictureBoxSizeMode.Zoom,
                     Image = ObtenerImagen(carta.NombreImagen()),
-                    Tag = carta,   // la carta, para saber cuál se tocó
+                    Tag = carta,
                     Cursor = enTurno ? Cursors.Hand : Cursors.Default,
                     Margin = new Padding(3),
                     Padding = sePuedeJugar ? new Padding(3) : new Padding(0),
@@ -479,8 +513,6 @@ namespace UnoUI
         // ===============================================================
         //  AYUDANTES
         // ===============================================================
-
-        // Carga una imagen de la carpeta Imagenes (solo la primera vez)
         private Image ObtenerImagen(string nombreArchivo)
         {
             if (!imagenes.TryGetValue(nombreArchivo, out Image? imagen))
@@ -492,7 +524,6 @@ namespace UnoUI
             return imagen;
         }
 
-        // Texto corto de una carta, por ejemplo "5 rojo" o "+2 azul"
         private static string Describir(Carta carta)
         {
             string color = carta.Color.ToString().ToLower();
@@ -512,7 +543,6 @@ namespace UnoUI
             return carta.Tipo == TipoCarta.Comodin || carta.Tipo == TipoCarta.ComodinMasCuatro;
         }
 
-        // Convierte el color del juego a un color de pantalla
         private static Color ColorDePantalla(ColorCarta color)
         {
             return color switch
