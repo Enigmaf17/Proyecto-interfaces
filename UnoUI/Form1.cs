@@ -62,6 +62,7 @@ namespace UnoUI
         public Form1()
         {
             InitializeComponent();
+            Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "uno.ico"));
             DoubleBuffered = true;
             controlador = new ControladorPartida(api);
             CrearMesa();
