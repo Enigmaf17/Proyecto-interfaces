@@ -41,6 +41,7 @@ namespace UnoUI
 
         // ===== Abajo =====
         private readonly Button btnUno = new Button();
+        private readonly Button btnHistorial = new Button();
 
         // ===== Imágenes ya cargadas =====
         private readonly Dictionary<string, Image> imagenes = new Dictionary<string, Image>();
@@ -154,10 +155,24 @@ namespace UnoUI
             btnUno.Cursor = Cursors.Hand;
             btnUno.Click += ClicEnUno;
 
+            // ----- Botón Historial (abajo a la izquierda) -----
+            btnHistorial.Location = new Point(20, 690);
+            btnHistorial.Size = new Size(175, 50);
+            btnHistorial.Text = "Historial";
+            btnHistorial.Font = new Font("Segoe UI", 13, FontStyle.Bold);
+            btnHistorial.ForeColor = Color.White;
+            btnHistorial.BackColor = Color.FromArgb(45, 48, 56);
+            btnHistorial.FlatStyle = FlatStyle.Flat;
+            btnHistorial.FlatAppearance.BorderColor = Dorado;
+            btnHistorial.FlatAppearance.BorderSize = 2;
+            btnHistorial.Cursor = Cursors.Hand;
+            btnHistorial.Click += ClicEnHistorial;
+
             Controls.AddRange(new Control[]
             {
-                lblFlecha, picMazo, lblMazo, picDescarte, lblColor, lblTurno, lblMensaje, btnUno
+                lblFlecha, picMazo, lblMazo, picDescarte, lblColor, lblTurno, lblMensaje, btnUno, btnHistorial
             });
+
         }
 
         private void CrearJugador(int indice, Point posicionNombre, Rectangle zona, bool variasFilas)
@@ -374,6 +389,15 @@ namespace UnoUI
                 await controlador.DecirUnoAsync();
                 MostrarMensaje($"¡{jugador.Nombre} dijo UNO!");
             });
+        }
+
+        // Abre la ventana del historial de partidas
+        private void ClicEnHistorial(object? sender, EventArgs e)
+        {
+            if (ocupado) return;   // no abrir mientras se está guardando una jugada
+
+            using var ventana = new FormHistorial(api);
+            ventana.ShowDialog(this);
         }
 
         // Robar del mazo; si la carta se puede jugar, preguntar si la tira
