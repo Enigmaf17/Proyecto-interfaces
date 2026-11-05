@@ -122,13 +122,13 @@ namespace UnoUI
         {
             MessageBox.Show(this, texto, "UNO", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
-
         public void Bloquear(bool bloqueado)
         {
             botonCrear.Enabled = !bloqueado;
             botonUnirse.Enabled = !bloqueado;
+            comboNombre.Enabled = !bloqueado;
+            cajaIp.Enabled = !bloqueado;
         }
-
         private static void ConfigurarBoton(Button boton, string texto, int x, Color fondo, Color textoColor)
         {
             boton.Text = texto;
