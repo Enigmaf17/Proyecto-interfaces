@@ -11,6 +11,14 @@ namespace UnoUI
 
         private readonly ComboBox comboNombre = new ComboBox();
 
+        private readonly TextBox cajaIp = new TextBox();
+        private readonly Button botonCrear = new Button();
+        private readonly Button botonUnirse = new Button();
+
+        public event EventHandler? CrearPartidaClic;
+        public event EventHandler? UnirseClic;
+
+        public string IpServidor => cajaIp.Text.Trim();
         public string NombreElegido => comboNombre.Text;
 
         public FormInicio()
@@ -47,7 +55,45 @@ namespace UnoUI
             comboNombre.SelectedIndex = 0;
             comboNombre.SetBounds(24, 86, 392, 28);
 
-            Controls.AddRange(new Control[] { titulo, etiquetaNombre, comboNombre });
+            var etiquetaIp = new Label
+            {
+                Text = "IP del servidor",
+                AutoSize = true,
+                Location = new Point(24, 126)
+            };
+            cajaIp.Text = "127.0.0.1";
+            cajaIp.BackColor = PanelFondo;
+            cajaIp.ForeColor = TextoClaro;
+            cajaIp.SetBounds(24, 152, 256, 28);
+
+            var etiquetaPuerto = new Label
+            {
+                Text = "Puerto 5000",
+                AutoSize = true,
+                Location = new Point(296, 155)
+            };
+
+            ConfigurarBoton(botonCrear, "Crear partida", 24, Dorado, Fondo);
+            ConfigurarBoton(botonUnirse, "Unirse", 228, PanelFondo, TextoClaro);
+
+            botonCrear.Click += (_, _) => CrearPartidaClic?.Invoke(this, EventArgs.Empty);
+            botonUnirse.Click += (_, _) => UnirseClic?.Invoke(this, EventArgs.Empty);
+
+            Controls.AddRange(new Control[]
+            {
+                titulo, etiquetaNombre, comboNombre, etiquetaIp, cajaIp,
+                etiquetaPuerto, botonCrear, botonUnirse
+            });
+        }
+
+        private static void ConfigurarBoton(Button boton, string texto, int x, Color fondo, Color textoColor)
+        {
+            boton.Text = texto;
+            boton.SetBounds(x, 194, 188, 36);
+            boton.FlatStyle = FlatStyle.Flat;
+            boton.FlatAppearance.BorderColor = Marco;
+            boton.BackColor = fondo;
+            boton.ForeColor = textoColor;
         }
     }
 }
