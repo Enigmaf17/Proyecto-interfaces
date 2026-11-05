@@ -5,7 +5,7 @@ namespace UnoRed
     public class Mensaje
     {
         public string Tipo { get; set; } = string.Empty;
-        public string? Nombre { get; set; }
+        public string? Nombre { get; set; } = string.Empty;
         public int? Indice { get; set; }
         public string? Color { get; set; }
         public int? JugadorId { get; set; }
