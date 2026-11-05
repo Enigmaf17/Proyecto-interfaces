@@ -15,6 +15,10 @@ namespace UnoUI
         private readonly Button botonCrear = new Button();
         private readonly Button botonUnirse = new Button();
 
+        private readonly Label etiquetaIpLocal = new Label();
+        private readonly Label etiquetaSala = new Label();
+        private readonly ListBox listaSala = new ListBox();
+
         public event EventHandler? CrearPartidaClic;
         public event EventHandler? UnirseClic;
 
@@ -79,11 +83,50 @@ namespace UnoUI
             botonCrear.Click += (_, _) => CrearPartidaClic?.Invoke(this, EventArgs.Empty);
             botonUnirse.Click += (_, _) => UnirseClic?.Invoke(this, EventArgs.Empty);
 
+            etiquetaIpLocal.Text = "Tu IP: —";
+            etiquetaIpLocal.AutoSize = true;
+            etiquetaIpLocal.Location = new Point(24, 246);
+
+            etiquetaSala.AutoSize = true;
+            etiquetaSala.ForeColor = Dorado;
+            etiquetaSala.Location = new Point(24, 280);
+
+            listaSala.BackColor = PanelFondo;
+            listaSala.ForeColor = TextoClaro;
+            listaSala.SelectionMode = SelectionMode.None;
+            listaSala.SetBounds(24, 310, 392, 96);
+
+            MostrarSala(new List<string>());
+
             Controls.AddRange(new Control[]
             {
                 titulo, etiquetaNombre, comboNombre, etiquetaIp, cajaIp,
-                etiquetaPuerto, botonCrear, botonUnirse
+                etiquetaPuerto, botonCrear, botonUnirse,
+                etiquetaIpLocal, etiquetaSala, listaSala
             });
+        }
+
+        public void MostrarIpLocal(string ip)
+        {
+            etiquetaIpLocal.Text = $"Tu IP: {ip}";
+        }
+
+        public void MostrarSala(List<string> conectados)
+        {
+            listaSala.Items.Clear();
+            listaSala.Items.AddRange(conectados.ToArray());
+            etiquetaSala.Text = $"Esperando jugadores ({conectados.Count}/3)";
+        }
+
+        public void MostrarError(string texto)
+        {
+            MessageBox.Show(this, texto, "UNO", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        public void Bloquear(bool bloqueado)
+        {
+            botonCrear.Enabled = !bloqueado;
+            botonUnirse.Enabled = !bloqueado;
         }
 
         private static void ConfigurarBoton(Button boton, string texto, int x, Color fondo, Color textoColor)
