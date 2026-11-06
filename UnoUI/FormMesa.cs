@@ -50,7 +50,6 @@ namespace UnoUI
 
         private Rectangle zonaMazo;
 
-        // Paul se suscribe a estos eventos.
         public event Action<int>? CartaClic;
         public event EventHandler? MazoClic;
         public event EventHandler? PasarClic;
@@ -166,7 +165,7 @@ namespace UnoUI
 
         public void MostrarVista(VistaJugador vista)
         {
-            // Las actualizaciones de controles van en el hilo de la ventana.
+            // Actualizar los controles desde el hilo de la ventana.
             if (InvokeRequired)
             {
                 Invoke(new Action(() => MostrarVista(vista)));
@@ -185,9 +184,11 @@ namespace UnoUI
             etiquetaMovimiento.Text =
                 vista.UltimoMovimiento ?? "";
 
-            etiquetaAviso.Text = vista.CartaRobada != null
-                ? "Puedes tirar la carta que robaste o pasar"
-                : "";
+            etiquetaAviso.Text = partidaTerminada
+                ? "Partida finalizada"
+                : vista.CartaRobada != null
+                    ? "Puedes tirar la carta que robaste o pasar"
+                    : "";
 
             botonPasar.Visible =
                 !partidaTerminada && vista.CartaRobada != null;
@@ -205,6 +206,7 @@ namespace UnoUI
 
             try
             {
+                // Liberar los controles de la mano anterior.
                 while (panelMano.Controls.Count > 0)
                 {
                     Control anterior = panelMano.Controls[0];
@@ -219,7 +221,6 @@ namespace UnoUI
 
                 for (int i = 0; i < vistaActual.MiMano.Count; i++)
                 {
-                    // Guardar el índice correspondiente a esta carta.
                     int indiceCarta = i;
                     string nombreCarta = vistaActual.MiMano[i];
 
@@ -290,7 +291,8 @@ namespace UnoUI
             dibujo.SmoothingMode = SmoothingMode.AntiAlias;
 
             int inicioMesa = etiquetaAviso.Bottom + 120;
-            int finMesa = panelBotones.Top - 16;
+            int finMesa =
+                Math.Min(panelMano.Top, panelBotones.Top) - 16;
 
             Rectangle mesa = new Rectangle(
                 35,
@@ -359,21 +361,36 @@ namespace UnoUI
             DibujarTexto(
                 dibujo,
                 $"Mazo: {vistaActual.CartasEnMazo}",
-                new Rectangle(zonaMazo.Left - 25, zonaMazo.Bottom + 5, 135, 25),
+                new Rectangle(
+                    zonaMazo.Left - 25,
+                    zonaMazo.Bottom + 5,
+                    135,
+                    25
+                ),
                 TextoClaro
             );
 
             DibujarTexto(
                 dibujo,
-                "Carta de arriba",
-                new Rectangle(descarte.Left - 25, descarte.Bottom + 5, 135, 25),
+                "Descarte",
+                new Rectangle(
+                    descarte.Left - 25,
+                    descarte.Bottom + 5,
+                    135,
+                    25
+                ),
                 TextoClaro
             );
 
             DibujarTexto(
                 dibujo,
                 $"Color: {vistaActual.ColorActual}",
-                new Rectangle(centroX - 150, centroY - 103, 300, 28),
+                new Rectangle(
+                    centroX - 150,
+                    centroY - 103,
+                    300,
+                    28
+                ),
                 ObtenerColor(vistaActual.ColorActual)
             );
         }
@@ -415,7 +432,10 @@ namespace UnoUI
                 {
                     separacion = Math.Min(
                         22,
-                        Math.Max(0, (anchoZona - 50) / (cantidad - 1))
+                        Math.Max(
+                            0,
+                            (anchoZona - 50) / (cantidad - 1)
+                        )
                     );
                 }
 
@@ -454,7 +474,6 @@ namespace UnoUI
                 return;
             }
 
-            // Mostrar el nombre si falta el archivo de imagen.
             using (SolidBrush fondo = new SolidBrush(PanelFondo))
             {
                 dibujo.FillRectangle(fondo, zona);
@@ -622,6 +641,9 @@ namespace UnoUI
 
         protected override void Dispose(bool disposing)
         {
+            // Primero liberar los controles que utilizan las imágenes.
+            base.Dispose(disposing);
+
             if (disposing)
             {
                 foreach (Image imagen in imagenes.Values)
@@ -631,8 +653,6 @@ namespace UnoUI
 
                 imagenes.Clear();
             }
-
-            base.Dispose(disposing);
         }
     }
 }
