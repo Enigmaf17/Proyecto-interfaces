@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UnoLogica\UnoLogica.csproj" />
+    <ProjectReference Include="..\UnoRed\UnoRed.csproj" />
   </ItemGroup>
 
   <ItemGroup>
