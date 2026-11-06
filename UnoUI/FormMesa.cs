@@ -64,8 +64,10 @@ namespace UnoUI
         public FormMesa()
         {
             Text = "UNO - Mesa en red";
-            ClientSize = new Size(1100, 800);
-            MinimumSize = new Size(950, 780);
+            ClientSize = new Size(1000, 640);
+            MinimumSize = new Size(800, 600);
+            WindowState = FormWindowState.Maximized;
+
             StartPosition = FormStartPosition.CenterScreen;
 
             BackColor = FondoOrilla;
