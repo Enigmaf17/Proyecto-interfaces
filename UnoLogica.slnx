@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="PruebaRed/PruebaRed.csproj" />
   <Project Path="UnoLogica/UnoLogica.csproj" />
   <Project Path="UnoPruebas/UnoPruebas.csproj" Id="f55ae569-13f2-43b1-af7f-d108ada2e8b8" />
   <Project Path="UnoRed/UnoRed.csproj" Id="8df20675-f954-4286-ad4d-f63315294b31" />
