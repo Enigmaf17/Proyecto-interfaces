@@ -5,7 +5,8 @@ namespace UnoUI
     // Ventana que muestra cuántas partidas ha ganado y perdido cada jugador
     public class FormHistorial : Form
     {
-        private readonly ApiCliente api;
+        private readonly ApiCliente? api;                       // juego local: se consulta la API
+        private readonly List<EstadisticasDto>? datosRecibidos;  // juego en red: llegan del servidor
         private readonly DataGridView tabla = new DataGridView();
         private readonly Label lblEstado = new Label();
 
@@ -13,9 +14,16 @@ namespace UnoUI
         private static readonly Color Fila = Color.FromArgb(40, 44, 52);
         private static readonly Color Dorado = Color.FromArgb(255, 200, 60);
 
-        public FormHistorial(ApiCliente api)
+        // Juego local: la ventana pide las estadísticas a la API
+        public FormHistorial(ApiCliente api) : this(api, null) { }
+
+        // Juego en red: las estadísticas ya llegaron del servidor (mensaje ESTADISTICAS)
+        public FormHistorial(List<EstadisticasDto> estadisticas) : this(null, estadisticas) { }
+
+        private FormHistorial(ApiCliente? api, List<EstadisticasDto>? estadisticas)
         {
             this.api = api;
+            datosRecibidos = estadisticas;
 
             Text = "Historial de partidas";
             ClientSize = new Size(560, 390);
@@ -110,14 +118,21 @@ namespace UnoUI
 
             try
             {
-                List<JugadorDto> jugadores = await api.ObtenerJugadoresAsync();
-
                 var estadisticas = new List<EstadisticasDto>();
-                foreach (JugadorDto jugador in jugadores)
+
+                if (datosRecibidos != null)
                 {
-                    EstadisticasDto? datos = await api.ObtenerEstadisticasAsync(jugador.Id);
-                    if (datos != null)
-                        estadisticas.Add(datos);
+                    estadisticas.AddRange(datosRecibidos);
+                }
+                else if (api != null)
+                {
+                    List<JugadorDto> jugadores = await api.ObtenerJugadoresAsync();
+                    foreach (JugadorDto jugador in jugadores)
+                    {
+                        EstadisticasDto? datos = await api.ObtenerEstadisticasAsync(jugador.Id);
+                        if (datos != null)
+                            estadisticas.Add(datos);
+                    }
                 }
 
                 // Primero el que más ha ganado; si empatan, el que menos ha perdido
