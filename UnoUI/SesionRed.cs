@@ -7,15 +7,16 @@ using UnoRed;
 namespace UnoUI
 {
     // Une las pantallas con la red.
-    // Las pantallas (FormInicio y, después, FormMesa) solo muestran datos y avisan clics;
+    // Las pantallas (FormInicio y FormMesa) solo muestran datos y avisan clics;
     // esta clase decide qué mandar al servidor y qué hacer con cada mensaje que llega.
     public class SesionRed
     {
         private readonly FormInicio inicio;
+        private FormMesa? mesa;              // se crea cuando llega el primer ESTADO
         private ClienteRed? cliente;
-        private Servidor? servidor;   // solo existe en la computadora que crea la partida
-        private int miId;             // 0 = el servidor todavía no me acepta
-        private bool partidaIniciada;
+        private Servidor? servidor;          // solo existe en la computadora que crea la partida
+        private VistaJugador? ultimaVista;   // lo último que mandó el servidor
+        private int miId;                    // 0 = el servidor todavía no me acepta
 
         public SesionRed(FormInicio inicio)
         {
@@ -95,7 +96,7 @@ namespace UnoUI
                     break;
 
                 case TiposMensaje.Error:
-                    inicio.MostrarError(m.Texto ?? "Error desconocido");
+                    MostrarError(m.Texto ?? "Error desconocido");
                     if (miId == 0)
                     {
                         // El servidor no me aceptó (por ejemplo, ese nombre ya está ocupado):
@@ -110,39 +111,99 @@ namespace UnoUI
                         MostrarVista(m.Vista);
                     break;
 
+                case TiposMensaje.Estadisticas:
+                    if (mesa != null && m.Estadisticas != null)
+                    {
+                        using var ventana = new FormHistorial(m.Estadisticas);
+                        ventana.ShowDialog(mesa);
+                    }
+                    break;
+
                 case TiposMensaje.Fin:
-                    MessageBox.Show(inicio, $"¡Ganó {m.Ganador}!", "UNO");
+                    mesa?.MostrarGanador(m.Ganador ?? "?");
                     break;
 
                 case TiposMensaje.Desconexion:
-                    MessageBox.Show(inicio, $"{m.Nombre} se desconectó. La partida se canceló.", "UNO");
+                    mesa?.MostrarDesconexion(m.Nombre ?? "Un jugador");
                     break;
             }
         }
 
-        // PROVISIONAL: cuando Rosa suba FormMesa, aquí se abre la mesa y se le pasa la vista.
-        // Por ahora solo avisa que la partida comenzó, para probar la sala de espera.
+        // Con el primer ESTADO se cambia de la pantalla de inicio a la mesa
         private void MostrarVista(VistaJugador vista)
         {
-            if (partidaIniciada)
-                return;
-            partidaIniciada = true;
+            ultimaVista = vista;
 
-            string empieza = vista.Jugadores.FirstOrDefault(j => j.Id == vista.TurnoId)?.Nombre ?? "?";
-            MessageBox.Show(inicio,
-                "¡La partida comenzó!\n\n" +
-                $"Tus cartas: {string.Join(", ", vista.MiMano)}\n" +
-                $"Carta en la mesa: {vista.CartaArriba}\n" +
-                $"Empieza: {empieza}",
-                "UNO");
+            if (mesa == null)
+            {
+                mesa = new FormMesa();
+                mesa.CartaClic += indice => Enviar(() => JugarCartaAsync(indice));
+                mesa.MazoClic += (s, e) => Enviar(() => cliente!.RobarAsync());
+                mesa.PasarClic += (s, e) => Enviar(() => cliente!.PasarAsync());
+                mesa.UnoClic += (s, e) => Enviar(() => cliente!.DecirUnoAsync());
+                mesa.HistorialClic += (s, e) => Enviar(() => cliente!.PedirHistorialAsync());
+                mesa.FormClosed += (s, e) => inicio.Close();   // cerrar la mesa cierra el juego
+
+                inicio.Hide();
+                mesa.Show();
+            }
+
+            mesa.MostrarVista(vista);
+        }
+
+        // Si la carta es un comodín, primero se pregunta el color
+        private async Task JugarCartaAsync(int indice)
+        {
+            if (cliente == null || ultimaVista == null || indice >= ultimaVista.MiMano.Count)
+                return;
+
+            string? color = null;
+            if (ultimaVista.MiMano[indice].StartsWith("comodin"))
+            {
+                using var ventana = new FormElegirColor();
+                ventana.ShowDialog(mesa);
+                color = ventana.ColorElegido.ToString();   // "Rojo", "Azul"...
+            }
+
+            await cliente.JugarAsync(indice, color);
+        }
+
+        // Manda una acción al servidor; si la conexión ya no existe, avisa en lugar de tronar
+        private async void Enviar(Func<Task> accion)
+        {
+            if (cliente == null)
+                return;
+            try
+            {
+                await accion();
+            }
+            catch (Exception)
+            {
+                MostrarError("No se pudo enviar la jugada: se perdió la conexión con el servidor.");
+            }
         }
 
         private void ConexionPerdida()
         {
             SoltarCliente();
-            inicio.MostrarError("Se perdió la conexión con el servidor.");
-            inicio.MostrarSala(new List<string>());
-            inicio.Bloquear(false);
+            if (mesa != null)
+            {
+                mesa.MostrarDesconexion("El servidor");
+            }
+            else
+            {
+                inicio.MostrarError("Se perdió la conexión con el servidor.");
+                inicio.MostrarSala(new List<string>());
+                inicio.Bloquear(false);
+            }
+        }
+
+        private void MostrarError(string texto)
+        {
+            if (mesa != null)
+                mesa.MostrarError(texto);
+            else
+                inicio.MostrarError(texto);
         }
 
         // ---------------- Cierre ----------------
@@ -158,7 +219,6 @@ namespace UnoUI
                 cliente = null;
             }
             miId = 0;
-            partidaIniciada = false;
         }
 
         private void DetenerServidor()
@@ -173,13 +233,17 @@ namespace UnoUI
             DetenerServidor();
         }
 
-        // La IP de esta computadora en la red (primero la del Wi-Fi), para que los demás la escriban
+        // La IP de esta computadora en la red (primero la del Wi-Fi), para que los demás la escriban.
+        // Se saltan los adaptadores virtuales (VirtualBox, VMware, Hyper-V), que no sirven para jugar.
         private static string ObtenerIpLocal()
         {
+            string[] virtuales = { "virtual", "vmware", "hyper-v", "vethernet", "bluetooth" };
             var ips = new List<string>();
+
             foreach (NetworkInterface red in NetworkInterface.GetAllNetworkInterfaces()
                          .Where(r => r.OperationalStatus == OperationalStatus.Up
-                                     && r.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                                     && r.NetworkInterfaceType != NetworkInterfaceType.Loopback
+                                     && !virtuales.Any(v => (r.Description + " " + r.Name).ToLower().Contains(v)))
                          .OrderBy(r => r.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ? 0 : 1))
             {
                 foreach (UnicastIPAddressInformation dir in red.GetIPProperties().UnicastAddresses)
